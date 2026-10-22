@@ -3,6 +3,8 @@ on:
   push:
     branches: [ main, master ]
   workflow_dispatch:
+permissions:
+  contents: write
 jobs:
   build:
     runs-on: windows-latest
@@ -20,3 +22,9 @@ jobs:
         with:
           name: EspelhoIHM-windows
           path: dist/EspelhoIHM.exe
+      - name: Publicar release com o .exe
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v1
+          name: EspelhoIHM
+          files: dist/EspelhoIHM.exe
