@@ -236,33 +236,56 @@ def teste_conexao(ip, porta=5900, timeout=4):
 def iniciar_espelho(dialog_frame):
     dialog_frame.destroy()
     root.title("IHM Chen Hsong - conectando...")
+
+    esc = [1]      # fator de reducao da imagem (1 = real, 2 = metade...)
+    fit = [False]  # ja encaixou na tela automaticamente?
+
+    bar = tk.Frame(root, bg="#222")
+    bar.pack(fill="x")
+    aviso = tk.Label(bar, text="Conectando...", fg="#ddd", bg="#222", anchor="w")
+    aviso.pack(side="left", padx=6)
+    def _repaint(): st["dirty"] = True
+    def zoom_mais():
+        if esc[0] > 1: esc[0] -= 1; _repaint()
+    def zoom_menos():
+        esc[0] += 1; _repaint()
+    def zoom_fit():
+        fit[0] = False; _repaint()
+    tk.Button(bar, text="Encaixar", command=zoom_fit).pack(side="right", padx=2, pady=2)
+    tk.Button(bar, text="+", width=3, command=zoom_mais).pack(side="right", padx=2, pady=2)
+    tk.Button(bar, text="-", width=3, command=zoom_menos).pack(side="right", padx=2, pady=2)
+
     mlbl = tk.Label(root, bg="#000")
     mlbl.pack()
-    aviso = tk.Label(root, text="Conectando... (F12 liga o controle; com controle ligado, clique na tela para operar)",
-                     fg="#bbb", bg="#222", anchor="w")
-    aviso.pack(fill="x")
 
     threading.Thread(target=loop, daemon=True).start()
 
     t0 = [time.time(), 0]
     def refresh():
-        if st["dirty"]:
+        if st["dirty"] and W > 0 and H > 0:
             st["dirty"] = False
+            if not fit[0]:
+                uh = max(200, root.winfo_screenheight() - 140)
+                uw = max(200, root.winfo_screenwidth() - 60)
+                esc[0] = max(1, (W + uw - 1) // uw, (H + uh - 1) // uh)
+                fit[0] = True
             with lock:
                 data = bytes(fb)
             hdr = ("P6\n%d %d\n255\n" % (W, H)).encode()
             img = tk.PhotoImage(data=hdr + data, format="PPM")
+            if esc[0] > 1:
+                img = img.subsample(esc[0], esc[0])
             mlbl.config(image=img); mlbl.image = img
         now = time.time()
         if now - t0[0] >= 1.5:
-            fps = (st["frames"] - t0[1]) / (now - t0[0]); t0[0] = now; t0[1] = st["frames"]
+            t0[0] = now; t0[1] = st["frames"]
             estado = "CONTROLE LIGADO (F12 desliga)" if ctl["on"] else "so visualizacao (F12 liga)"
-            root.title("IHM Chen Hsong | %s | %s" % (st["msg"], estado))
+            root.title("IHM Chen Hsong | %s | zoom 1/%d | %s" % (st["msg"], esc[0], estado))
             if st["frames"] == 0:
                 aviso.config(text="%s  -  se pedir senha e recusar, confira a senha de operacao." % st["msg"])
             else:
-                aviso.config(text="F12 %s  |  com controle ligado, clique na tela para operar (toque)." %
-                             ("LIGADO - clique opera a maquina" if ctl["on"] else "desligado"))
+                aviso.config(text="F12 %s  |  clique opera (toque)  |  use + / - / Encaixar para o zoom" %
+                             ("CONTROLE LIGADO" if ctl["on"] else "desligado"))
         root.after(100, refresh)
     refresh()
 
@@ -274,7 +297,7 @@ def iniciar_espelho(dialog_frame):
                 with sl: s.sendall(b)
             except OSError: pass
     def ptr(e, mask):
-        x = max(0, min(W - 1, e.x)); y = max(0, min(H - 1, e.y))
+        x = max(0, min(W - 1, e.x * esc[0])); y = max(0, min(H - 1, e.y * esc[0]))
         enviar(struct.pack(">BBHH", 5, mask, x, y))
     def mdown(e): ctl["btn"] = 1; ptr(e, 1)
     def mmove(e): ptr(e, ctl["btn"])
