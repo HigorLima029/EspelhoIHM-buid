@@ -326,7 +326,10 @@ def iniciar_espelho(dialog_frame):
     def mdown(e): ctl["btn"] = 1; ptr(e, 1)
     def mmove(e): ptr(e, ctl["btn"])
     def mup(e): ctl["btn"] = 0; ptr(e, 0)
+    def mhover(e):
+        if ctl["btn"] == 0: ptr(e, 0)   # move o cursor sem botao (hover) -> menus funcionam
     cv.bind("<ButtonPress-1>", mdown); cv.bind("<B1-Motion>", mmove); cv.bind("<ButtonRelease-1>", mup)
+    cv.bind("<Motion>", mhover)
     KS = {"Return":0xff0d,"KP_Enter":0xff8d,"BackSpace":0xff08,"Tab":0xff09,"Escape":0xff1b,"Delete":0xffff,
           "Left":0xff51,"Up":0xff52,"Right":0xff53,"Down":0xff54,"Home":0xff50,"End":0xff57,
           "Prior":0xff55,"Next":0xff56,"Shift_L":0xffe1,"Shift_R":0xffe2}
