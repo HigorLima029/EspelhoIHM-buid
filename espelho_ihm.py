@@ -255,8 +255,25 @@ def iniciar_espelho(dialog_frame):
     tk.Button(bar, text="+", width=3, command=zoom_mais).pack(side="right", padx=2, pady=2)
     tk.Button(bar, text="-", width=3, command=zoom_menos).pack(side="right", padx=2, pady=2)
 
-    mlbl = tk.Label(root, bg="#000")
-    mlbl.pack()
+    area = tk.Frame(root)
+    area.pack(fill="both", expand=True)
+    vs = tk.Scrollbar(area, orient="vertical")
+    hs = tk.Scrollbar(area, orient="horizontal")
+    cv = tk.Canvas(area, bg="#000", highlightthickness=0,
+                   yscrollcommand=vs.set, xscrollcommand=hs.set)
+    vs.config(command=cv.yview); hs.config(command=cv.xview)
+    vs.pack(side="right", fill="y")
+    hs.pack(side="bottom", fill="x")
+    cv.pack(side="left", fill="both", expand=True)
+    img_id = cv.create_image(0, 0, anchor="nw")
+    vp = [False]   # viewport ja dimensionado?
+    def _wheel(e):
+        d = 0
+        if getattr(e, "num", 0) == 4 or getattr(e, "delta", 0) > 0: d = -1
+        elif getattr(e, "num", 0) == 5 or getattr(e, "delta", 0) < 0: d = 1
+        if e.state & 0x1: cv.xview_scroll(d, "units")   # Shift = horizontal
+        else: cv.yview_scroll(d, "units")
+    cv.bind("<MouseWheel>", _wheel); cv.bind("<Button-4>", _wheel); cv.bind("<Button-5>", _wheel)
 
     threading.Thread(target=loop, daemon=True).start()
 
@@ -275,7 +292,13 @@ def iniciar_espelho(dialog_frame):
             img = tk.PhotoImage(data=hdr + data, format="PPM")
             if esc[0] > 1:
                 img = img.subsample(esc[0], esc[0])
-            mlbl.config(image=img); mlbl.image = img
+            cv.itemconfig(img_id, image=img); cv.image = img
+            cv.config(scrollregion=(0, 0, img.width(), img.height()))
+            if not vp[0]:
+                vw = min(img.width(), max(200, root.winfo_screenwidth() - 80))
+                vh = min(img.height(), max(200, root.winfo_screenheight() - 170))
+                cv.config(width=vw, height=vh)
+                vp[0] = True
         now = time.time()
         if now - t0[0] >= 1.5:
             t0[0] = now; t0[1] = st["frames"]
@@ -297,12 +320,13 @@ def iniciar_espelho(dialog_frame):
                 with sl: s.sendall(b)
             except OSError: pass
     def ptr(e, mask):
-        x = max(0, min(W - 1, e.x * esc[0])); y = max(0, min(H - 1, e.y * esc[0]))
+        x = max(0, min(W - 1, int(cv.canvasx(e.x)) * esc[0]))
+        y = max(0, min(H - 1, int(cv.canvasy(e.y)) * esc[0]))
         enviar(struct.pack(">BBHH", 5, mask, x, y))
     def mdown(e): ctl["btn"] = 1; ptr(e, 1)
     def mmove(e): ptr(e, ctl["btn"])
     def mup(e): ctl["btn"] = 0; ptr(e, 0)
-    mlbl.bind("<ButtonPress-1>", mdown); mlbl.bind("<B1-Motion>", mmove); mlbl.bind("<ButtonRelease-1>", mup)
+    cv.bind("<ButtonPress-1>", mdown); cv.bind("<B1-Motion>", mmove); cv.bind("<ButtonRelease-1>", mup)
     KS = {"Return":0xff0d,"KP_Enter":0xff8d,"BackSpace":0xff08,"Tab":0xff09,"Escape":0xff1b,"Delete":0xffff,
           "Left":0xff51,"Up":0xff52,"Right":0xff53,"Down":0xff54,"Home":0xff50,"End":0xff57,
           "Prior":0xff55,"Next":0xff56,"Shift_L":0xffe1,"Shift_R":0xffe2}
@@ -319,7 +343,7 @@ def iniciar_espelho(dialog_frame):
         if k: enviar(struct.pack(">BBxxI", 4, 0, k))
     def alternar(e=None):
         ctl["on"] = not ctl["on"]
-        mlbl.config(highlightthickness=5 if ctl["on"] else 0, highlightbackground="red")
+        cv.config(highlightthickness=5 if ctl["on"] else 0, highlightbackground="red")
     root.bind("<KeyPress>", kdown); root.bind("<KeyRelease>", kup); root.bind("<F12>", alternar)
 
 # ------------------- janela inicial (IP + senha) -------------------
